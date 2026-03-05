@@ -1,7 +1,7 @@
 """
 数据库模型定义
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint, Enum as SQLEnum
 from sqlalchemy.orm import relationship, declarative_base
 import enum
@@ -31,7 +31,7 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False)
     company = Column(String(255))
     password_hash = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # 关系
     projects = relationship("Project", back_populates="creator", foreign_keys="Project.creator_id")
@@ -49,7 +49,7 @@ class Project(Base):
     deadline = Column(DateTime, nullable=False)
     status = Column(SQLEnum(ProjectStatus), default=ProjectStatus.DRAFT)
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     opened_at = Column(DateTime)
 
     # 关系
@@ -66,7 +66,7 @@ class Bid(Base):
     bidder_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     price_encrypted = Column(Text, nullable=False)  # AES-256 加密的报价
     params_json = Column(Text)  # 投标方填写的参数 (JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     # 唯一约束：每个投标方对每个项目只能投标一次
     __table_args__ = (
@@ -89,4 +89,4 @@ class AuditLog(Base):
     resource_id = Column(Integer)  # 资源 ID
     details = Column(Text)  # 详细信息 (JSON)
     ip_address = Column(String(45))  # IP 地址
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)

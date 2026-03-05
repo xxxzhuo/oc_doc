@@ -95,13 +95,13 @@ const handleLogin = async () => {
     try {
       const response = await axios.post('/api/auth/login', form)
       
-      if (response.data.access_token) {
-        userStore.setToken(response.data.access_token, response.data.user)
+      if (response.access_token) {
+        userStore.setToken(response.access_token, response.user)
         ElMessage.success('登录成功')
         router.push('/projects')
       }
     } catch (error) {
-      ElMessage.error(error.response?.data?.detail || '登录失败')
+      // 错误已在 axios 拦截器中处理
     } finally {
       loading.value = false
     }

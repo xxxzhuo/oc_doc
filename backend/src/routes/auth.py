@@ -1,24 +1,35 @@
 """
 用户认证路由
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_db
 from src.models import User, UserRole
-from src.auth import verify_password, get_password_hash, create_access_token
+from src.auth import (
+    verify_password, 
+    get_password_hash, 
+    create_access_token,
+    get_current_user,
+    is_token_expired
+)
 from datetime import timedelta
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
+
+# 速率限制器
+limiter = Limiter(key_func=get_remote_address)
 
 
 class RegisterRequest(BaseModel):
     """注册请求"""
     name: str
     email: EmailStr
-    password: str
-    role: str  # 'tenderer' or 'bidder'
+    password: str = Field(..., min_length=6)
+    role: str
     company: str = None
 
 
@@ -46,27 +57,16 @@ class UserResponse(BaseModel):
 
 @router.post("/register", response_model=UserResponse)
 async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    """
-    用户注册
-    """
-    # 检查邮箱是否已存在
+    """用户注册"""
     result = await db.execute(select(User).where(User.email == request.email))
     existing_user = result.scalar_one_or_none()
     
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该邮箱已被注册"
-        )
+        raise HTTPException(status_code=400, detail="该邮箱已被注册")
     
-    # 验证角色
     if request.role not in ["tenderer", "bidder"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="角色必须是 'tenderer' 或 'bidder'"
-        )
+        raise HTTPException(status_code=400, detail="角色必须是 'tenderer' 或 'bidder'")
     
-    # 创建新用户
     user = User(
         name=request.name,
         email=request.email,
@@ -89,22 +89,23 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """
-    用户登录
-    """
-    # 查找用户
-    result = await db.execute(select(User).where(User.email == request.email))
+@limiter.limit("5/minute")  # 登录限流：5 次/分钟
+async def login(
+    request: Request,
+    login_request: LoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """用户登录 (限流：5 次/分钟)"""
+    result = await db.execute(select(User).where(User.email == login_request.email))
     user = result.scalar_one_or_none()
     
-    if not user or not verify_password(request.password, user.password_hash):
+    if not user or not verify_password(login_request.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=401,
             detail="邮箱或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 创建访问令牌
     access_token = create_access_token(
         data={
             "sub": str(user.id),
@@ -128,11 +129,12 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user(
-    current_user: dict = Depends(lambda: {"id": 1, "name": "示例用户", "email": "user@example.com", "role": "bidder"})
-):
-    """
-    获取当前用户信息
-    (实际实现需要从 token 解析)
-    """
-    return UserResponse(**current_user)
+async def get_me(current_user: dict = Depends(get_current_user)):
+    """获取当前用户信息"""
+    return UserResponse(
+        id=current_user["user_id"],
+        name=current_user["name"],
+        email=current_user["email"],
+        role=current_user["role"],
+        company=current_user.get("company")
+    )

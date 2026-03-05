@@ -16,7 +16,6 @@ bcrypt==4.0.1
 
 # 加密
 cryptography==41.0.7
-pycryptodome==3.19.0
 
 # 工具
 pydantic==2.5.2
@@ -31,5 +30,5 @@ httpx==0.25.2
 # 日志
 loguru==0.7.2
 
-# CORS
-fastapi-cors==0.0.6
+# 速率限制
+slowapi==0.1.9

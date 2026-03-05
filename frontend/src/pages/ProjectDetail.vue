@@ -68,13 +68,13 @@
         <el-form-item label="报价" prop="price">
           <el-input-number
             v-model="bidForm.price"
-            :min="0"
+            :min="1"
             :precision="2"
             :step="100"
             placeholder="请输入报价"
             style="width: 100%"
           />
-          <p class="form-tip">💰 报价将被加密存储，其他投标方无法查看</p>
+          <p class="form-tip">💰 报价将通过 AES-256 加密传输</p>
         </el-form-item>
         
         <el-form-item label="投标参数" prop="params">
@@ -160,7 +160,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import axios from 'axios'
+import request from '@/utils/request'
+import CryptoJS from 'crypto-js'
 import dayjs from 'dayjs'
 
 const route = useRoute()
@@ -212,27 +213,43 @@ const isDeadlineSoon = computed(() => {
   return hoursLeft > 0 && hoursLeft <= 24
 })
 
+/**
+ * 前端加密报价 (AES-256)
+ */
+const encryptPrice = (price) => {
+  const keyStr = import.meta.env.VITE_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+  const key = CryptoJS.enc.Hex.parse(keyStr)
+  const iv = CryptoJS.lib.WordArray.random(16)
+  
+  const data = JSON.stringify({ price, ts: Date.now() })
+  const encrypted = CryptoJS.AES.encrypt(data, key, {
+    iv,
+    mode: CryptoJS.mode.CBC,
+    padding: CryptoJS.pad.Pkcs7
+  })
+  
+  return iv.toString(CryptoJS.enc.Base64) + ':' + encrypted.ciphertext.toString(CryptoJS.enc.Base64)
+}
+
 const loadProject = async () => {
   try {
-    const response = await axios.get(`/api/projects/${route.params.id}`)
-    project.value = response.data
+    const response = await request.get(`/projects/${route.params.id}`)
+    project.value = response
   } catch (error) {
-    ElMessage.error('加载项目详情失败')
+    console.error('加载项目失败:', error)
   }
 }
 
 const loadBids = async () => {
   try {
     const endpoint = showPrice.value 
-      ? `/api/projects/${route.params.id}/bids/detail`
-      : `/api/projects/${route.params.id}/bids`
-    
-    const response = await axios.get(endpoint)
-    
+      ? `/projects/${route.params.id}/bids/detail`
+      : `/projects/${route.params.id}/bids`
+    const response = await request.get(endpoint)
     if (showPrice.value) {
-      bidDetails.value = response.data
+      bidDetails.value = response
     } else {
-      bids.value = response.data
+      bids.value = response
     }
   } catch (error) {
     console.error('加载投标列表失败:', error)
@@ -245,7 +262,6 @@ const handleBid = async () => {
   await bidFormRef.value.validate(async (valid) => {
     if (!valid) return
     
-    // 解析参数 JSON
     try {
       bidForm.params = paramsText.value ? JSON.parse(paramsText.value) : {}
     } catch (e) {
@@ -256,18 +272,18 @@ const handleBid = async () => {
     submitting.value = true
     
     try {
-      await axios.post(`/api/projects/${route.params.id}/bids`, bidForm)
+      const encryptedPrice = encryptPrice(bidForm.price)
+      await request.post(`/projects/${route.params.id}/bids`, {
+        price_encrypted: encryptedPrice,
+        params: bidForm.params
+      })
       ElMessage.success('投标提交成功')
-      
-      // 重置表单
       bidForm.price = null
       paramsText.value = ''
-      
-      // 刷新数据
       loadProject()
       loadBids()
     } catch (error) {
-      ElMessage.error(error.response?.data?.detail || '投标失败')
+      console.error('投标失败:', error)
     } finally {
       submitting.value = false
     }
@@ -275,38 +291,19 @@ const handleBid = async () => {
 }
 
 const getStatusType = (status) => {
-  const types = {
-    draft: 'info',
-    active: 'primary',
-    closed: 'warning',
-    opened: 'success'
-  }
+  const types = { draft: 'info', active: 'primary', closed: 'warning', opened: 'success' }
   return types[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const texts = {
-    draft: '草稿',
-    active: '投标中',
-    closed: '已截止',
-    opened: '已开标'
-  }
+  const texts = { draft: '草稿', active: '投标中', closed: '已截止', opened: '已开标' }
   return texts[status] || status
 }
 
-const formatDate = (date) => {
-  return dayjs(date).format('YYYY-MM-DD HH:mm')
-}
+const formatDate = (date) => dayjs(date).format('YYYY-MM-DD HH:mm')
 
-const getRankType = (index) => {
-  const types = ['warning', 'info', 'success']
-  return types[index] || ''
-}
-
-const getRankSuffix = (rank) => {
-  const suffixes = ['名', '名', '名', '名']
-  return suffixes[rank - 1] || '名'
-}
+const getRankType = (index) => ['warning', 'info', 'success'][index] || ''
+const getRankSuffix = () => '名'
 
 onMounted(() => {
   loadProject()
@@ -321,56 +318,25 @@ onMounted(() => {
   padding: 20px;
 }
 
-.back-nav {
-  margin-bottom: 20px;
-}
+.back-nav { margin-bottom: 20px; }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  
-  h1 {
-    font-size: 24px;
-    margin: 0;
-  }
+  h1 { font-size: 24px; margin: 0; }
 }
 
 .project-content {
   .section {
     margin-bottom: 30px;
-    
-    h3 {
-      font-size: 16px;
-      color: #333;
-      margin-bottom: 15px;
-    }
-    
-    p {
-      color: #606266;
-      line-height: 1.8;
-    }
+    h3 { font-size: 16px; color: #333; margin-bottom: 15px; }
+    p { color: #606266; line-height: 1.8; }
   }
 }
 
-.bid-card, .bids-card, .results-card {
-  margin-top: 20px;
-}
-
-.form-tip {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 5px;
-}
-
-.deadline-warning {
-  color: #F56C6C;
-  font-weight: bold;
-}
-
-.price-text {
-  font-weight: bold;
-  color: #F56C6C;
-  font-size: 15px;
-}
+.bid-card, .bids-card, .results-card { margin-top: 20px; }
+.form-tip { font-size: 12px; color: #909399; margin-top: 5px; }
+.deadline-warning { color: #F56C6C; font-weight: bold; }
+.price-text { font-weight: bold; color: #F56C6C; font-size: 15px; }
 </style>
