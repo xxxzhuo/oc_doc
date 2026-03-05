@@ -1,0 +1,129 @@
+// 全局样式变量
+$primary-color: #409EFF;
+$success-color: #67C23A;
+$warning-color: #E6A23C;
+$danger-color: #F56C6C;
+$info-color: #909399;
+
+$font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+
+// 全局重置
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: $font-family;
+  font-size: 14px;
+  color: #333;
+  background-color: #f5f7fa;
+}
+
+// 工具类
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.mt-10 {
+  margin-top: 10px;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.mb-10 {
+  margin-bottom: 10px;
+}
+
+.mb-20 {
+  margin-bottom: 20px;
+}
+
+// 页面容器
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+// 卡片样式
+.card {
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+// 状态标签
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  
+  &.draft {
+    background: #f0f0f0;
+    color: #909399;
+  }
+  
+  &.active {
+    background: #e6f7ff;
+    color: #1890ff;
+  }
+  
+  &.closed {
+    background: #fff7e6;
+    color: #fa8c16;
+  }
+  
+  &.opened {
+    background: #f6ffed;
+    color: #52c41a;
+  }
+}
+
+// 按钮组
+.btn-group {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+// 表单样式
+.form-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+// 表格样式
+.table-container {
+  overflow-x: auto;
+}
+
+// 响应式
+@media (max-width: 768px) {
+  .page-container {
+    padding: 10px;
+  }
+  
+  .card {
+    padding: 15px;
+  }
+}
